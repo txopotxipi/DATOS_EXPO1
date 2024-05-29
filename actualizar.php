@@ -1,101 +1,107 @@
 <?php
-function obtenerEstructura() {
-    $datos = file_get_contents('datos.json');
-    $estructura = json_decode($datos, true);
-    $especialidades = $estructura['especialidades'];
-    return json_encode($especialidades);
-}
+if ($_SERVER['REQUEST_METHOD'] == 'POST') {
+    $accion = $_POST['accion'];
+    $nombre = $_POST['nombre'];
 
-function actualizarDatos($elemento, $nuevoValor) {
-    $datos = file_get_contents('datos.json');
-    $estructura = json_decode($datos, true);
-    actualizarValorEnEstructura($estructura['especialidades'], $elemento, $nuevoValor);
-    $datosActualizados = json_encode($estructura, JSON_PRETTY_PRINT);
-    file_put_contents('datos.json', $datosActualizados);
-}
+    // Leer los datos actuales
+    $data = json_decode(file_get_contents('datos.json'), true);
 
-function actualizarValorEnEstructura(&$estructura, $elemento, $nuevoValor) {
-    foreach ($estructura as &$item) {
-        if ($item['nombre'] === $elemento) {
-            $item['valor'] = $nuevoValor;
-            return;
-        }
-        if (isset($item['elementos'])) {
-            actualizarValorEnEstructura($item['elementos'], $elemento, $nuevoValor);
-        }
-        if (isset($item['componentes'])) {
-            actualizarValorEnEstructura($item['componentes'], $elemento, $nuevoValor);
-        }
-    }
-}
-
-function crearElemento($rutaPadre, $nuevoElemento, $nuevoValor) {
-    $datos = file_get_contents('datos.json');
-    $estructura = json_decode($datos, true);
-    $ruta = explode('/', $rutaPadre);
-    $elementoPadre = buscarElementoPadre($estructura['especialidades'], $ruta);
-
-    if ($elementoPadre !== null) {
-        if (!isset($elementoPadre['elementos'])) {
-            $elementoPadre['elementos'] = [];
-        }
-        $elementoPadre['elementos'][] = [
-            'nombre' => $nuevoElemento,
-            'valor' => $nuevoValor,
-            'componentes' => []
+    if ($accion == 'insertar') {
+        $valor = $_POST['valor'];
+        $padre = $_POST['padre'];
+        // Crear un nuevo elemento
+        $nuevoElemento = [
+            'nombre' => $nombre,
+            'valor' => $valor,
+            'componentes' => []  // Inicializar con una lista vacía si no hay componentes
         ];
-        $datosActualizados = json_encode($estructura, JSON_PRETTY_PRINT);
-        file_put_contents('datos.json', $datosActualizados);
-    } else {
-        echo "No se encontró el elemento padre";
-    }
-}
-
-function &buscarElementoPadre(&$estructura, $ruta) {
-    if (empty($ruta)) {
-        return $estructura;
-    }
-
-    $elementoActual = array_shift($ruta);
-    foreach ($estructura as &$item) {
-        if ($item['nombre'] === $elementoActual) {
-            if (empty($ruta)) {
-                return $item;
+        // Buscar el elemento padre y agregar el nuevo elemento como componente
+        foreach ($data['especialidades'] as &$especialidad) {
+            if ($especialidad['nombre'] === $padre) {
+                $especialidad['elementos'][] = $nuevoElemento;
+                break;
             } else {
-                if (isset($item['componentes'])) {
-                    $resultado = &buscarElementoPadre($item['componentes'], $ruta);
-                    if ($resultado !== null) {
-                        return $resultado;
+                foreach ($especialidad['elementos'] as &$elemento) {
+                    if ($elemento['nombre'] === $padre) {
+                        $elemento['componentes'][] = $nuevoElemento;
+                        break 2;
                     }
                 }
-                if (isset($item['elementos'])) {
-                    $resultado = &buscarElementoPadre($item['elementos'], $ruta);
-                    if ($resultado !== null) {
-                        return $resultado;
+            }
+        }
+    } elseif ($accion == 'actualizar') {
+        $nuevo_nombre = $_POST['nuevo_nombre'];
+        $nuevo_valor = $_POST['nuevo_valor'];
+        // Buscar y actualizar el elemento existente
+        foreach ($data['especialidades'] as &$especialidad) {
+            if ($especialidad['nombre'] === $nombre) {
+                if ($nuevo_nombre) {
+                    $especialidad['nombre'] = $nuevo_nombre;
+                }
+                if ($nuevo_valor) {
+                    $especialidad['valor'] = $nuevo_valor;
+                }
+            } else {
+                foreach ($especialidad['elementos'] as &$elemento) {
+                    if ($elemento['nombre'] === $nombre) {
+                        if ($nuevo_nombre) {
+                            $elemento['nombre'] = $nuevo_nombre;
+                        }
+                        if ($nuevo_valor) {
+                            $elemento['valor'] = $nuevo_valor;
+                        }
+                    } else {
+                        foreach ($elemento['componentes'] as &$componente) {
+                            if ($componente['nombre'] === $nombre) {
+                                if ($nuevo_nombre) {
+                                    $componente['nombre'] = $nuevo_nombre;
+                                }
+                                if ($nuevo_valor) {
+                                    $componente['valor'] = $nuevo_valor;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    } elseif ($accion == 'eliminar') {
+        // Buscar y eliminar el elemento existente
+        foreach ($data['especialidades'] as &$especialidad) {
+            if ($especialidad['nombre'] === $nombre) {
+                // Eliminar especialidad completa
+                $data['especialidades'] = array_filter($data['especialidades'], function($e) use ($nombre) {
+                    return $e['nombre'] !== $nombre;
+                });
+                break;
+            } else {
+                foreach ($especialidad['elementos'] as &$elemento) {
+                    if ($elemento['nombre'] === $nombre) {
+                        // Eliminar elemento de la especialidad
+                        $especialidad['elementos'] = array_filter($especialidad['elementos'], function($e) use ($nombre) {
+                            return $e['nombre'] !== $nombre;
+                        });
+                        break 2;
+                    } else {
+                        foreach ($elemento['componentes'] as &$componente) {
+                            if ($componente['nombre'] === $nombre) {
+                                // Eliminar componente del elemento
+                                $elemento['componentes'] = array_filter($elemento['componentes'], function($c) use ($nombre) {
+                                    return $c['nombre'] !== $nombre;
+                                });
+                                break 3;
+                            }
+                        }
                     }
                 }
             }
         }
     }
-    $null = null;
-    return $null;
-}
 
-if (isset($_GET['action']) && $_GET['action'] === 'obtenerEstructura') {
-    echo obtenerEstructura();
-}
-
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $accion = $_POST['accion'];
-    if ($accion === 'actualizar') {
-        $elemento = $_POST['elemento'];
-        $nuevoValor = $_POST['nuevoValor'];
-        actualizarDatos($elemento, $nuevoValor);
-    } elseif ($accion === 'crear') {
-        $rutaPadre = $_POST['rutaPadre'];
-        $nuevoElemento = $_POST['nuevoElemento'];
-        $nuevoValor = $_POST['nuevoValor'];
-        crearElemento($rutaPadre, $nuevoElemento, $nuevoValor);
-    }
+    // Guardar los datos actualizados
+    file_put_contents('datos.json', json_encode($data, JSON_PRETTY_PRINT));
+    echo "Operación realizada correctamente.";
+} else {
+    echo "Método no permitido.";
 }
 ?>

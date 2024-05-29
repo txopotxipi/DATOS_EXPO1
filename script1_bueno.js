@@ -92,9 +92,4 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         })
         .catch(error => console.error('Error cargando los datos:', error));
-
-            // Inicializar Select2 en los elementos <select>
-    $('#elemento-select').select2();
-    $('#padre-select').select2();
-    $('#elemento-eliminar-select').select2();
 });
